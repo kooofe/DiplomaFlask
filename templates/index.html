@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.1/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript">
+        $(document).ready(function(){
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+            socket.on('connect', function() {
+                socket.emit('message', 'User connected!');
+            });
+            socket.on('message', function(data) {
+                $('#messages').append('<li><strong>' + data.username + ': </strong>' + data.message + '</li>');
+            });
+            $('#send').click(function(){
+                socket.emit('message', $('#myMessage').val());
+                $('#myMessage').val('');
+                return false;
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Chat</h1>
+    <ul id="messages">
+        {% for sender, message in messages %}
+            <li><strong>{{ sender }}:</strong> {{ message }}</li>
+        {% endfor %}
+    </ul>
+    <form>
+        <input id="myMessage" autocomplete="off" /><button id="send">Send</button>
+    </form>
+    <a href="{{ url_for('logout') }}">Logout</a>
+</body>
+</html>
+
