@@ -93,18 +93,64 @@ key = Fernet.generate_key()
 cipher_suite = Fernet(key)
 
 
-def create_table():
+def get_db_connection():
     conn = sqlite3.connect('users.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def create_table():
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS user
-                 (id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS message
-                 (id INTEGER PRIMARY KEY, sender TEXT NOT NULL, receiver TEXT NOT NULL, encrypted_content TEXT NOT NULL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS user (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS message (
+                    id INTEGER PRIMARY KEY,
+                    sender TEXT NOT NULL,
+                    receiver TEXT NOT NULL,
+                    encrypted_content TEXT NOT NULL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS login_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
     conn.close()
 
 
 create_table()
+
+
+# Function to check login attempts
+def check_login_attempts(username):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('''SELECT COUNT(*) as attempt_count
+                 FROM login_attempts 
+                 WHERE username = ? 
+                 AND timestamp >= datetime('now', '-15 minutes')''', (username,))
+    attempts = c.fetchone()['attempt_count']
+    conn.close()
+    return attempts
+
+
+# Function to record login attempt
+def record_login_attempt(username):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('INSERT INTO login_attempts (username) VALUES (?)', (username,))
+    conn.commit()
+    conn.close()
+
+
+# Function to clear login attempts older than 15 minutes
+def clear_old_attempts(username):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM login_attempts WHERE username = ? AND timestamp < datetime('now', '-15 minutes')", (username,))
+    conn.commit()
+    conn.close()
 
 
 @app.route('/api/messages', methods=['GET'])
@@ -131,10 +177,21 @@ def login():
     data = request.json
     username = data['username']
     password = data['password']
+
+    # Clear old attempts for the user
+    clear_old_attempts(username)
+
+    # Check the number of login attempts
+    attempts = check_login_attempts(username)
+    if attempts >= 3:
+        return jsonify({"error": "Too many failed login attempts. Please try again after 15 minutes."}), 403
+
+    # Verify user
     if verify_user(username, password):
         session['username'] = username
         return jsonify({"success": "Logged in"})
     else:
+        record_login_attempt(username)
         return jsonify({"error": "Invalid username or password"}), 401
 
 
@@ -188,12 +245,12 @@ def insert_message(sender, receiver, encrypted_content):
 
 
 def verify_user(username, password):
-    conn = sqlite3.connect('users.db')
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT password FROM user WHERE username=?", (username,))
     user = c.fetchone()
     conn.close()
-    if user and check_password_hash(user[0], password):
+    if user and check_password_hash(user['password'], password):
         return True
     return False
 
