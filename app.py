@@ -83,15 +83,6 @@ decrypted_data = decrypt_with_aes(decrypted_aes_key, encrypted_data).decode()
 
 print("Decrypted Data:", decrypted_data)
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-CORS(app, supports_credentials=True)
-socketio = SocketIO(app, cors_allowed_origins="*")
-
-# Encryption setup
-key = Fernet.generate_key()
-cipher_suite = Fernet(key)
-
 
 def get_db_connection():
     conn = sqlite3.connect('users.db')
@@ -148,7 +139,8 @@ def record_login_attempt(username):
 def clear_old_attempts(username):
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("DELETE FROM login_attempts WHERE username = ? AND timestamp < datetime('now', '-15 minutes')", (username,))
+    c.execute("DELETE FROM login_attempts WHERE username = ? AND timestamp < datetime('now', '-15 minutes')",
+              (username,))
     conn.commit()
     conn.close()
 
@@ -157,16 +149,18 @@ def clear_old_attempts(username):
 def get_messages():
     if 'username' not in session:
         return jsonify({"error": "Unauthorized"}), 401
-    conn = sqlite3.connect('users.db')
+    username = session['username']
+    conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM message")
+    c.execute("SELECT * FROM message WHERE receiver = ? OR receiver = 'all'", (username,))
     messages = c.fetchall()
     conn.close()
     decrypted_messages = []
     for message in messages:
         try:
-            decrypted_content = cipher_suite.decrypt(message[3].encode()).decode()
-            decrypted_messages.append({"sender": message[1], "message": decrypted_content})
+            decrypted_content = cipher_suite.decrypt(message['encrypted_content'].encode()).decode()
+            decrypted_messages.append(
+                {"sender": message['sender'], "receiver": message['receiver'], "message": decrypted_content})
         except Exception as e:
             print("Error decrypting message:", e)
     return jsonify(decrypted_messages)
@@ -215,6 +209,18 @@ def logout():
     return jsonify({"success": "Logged out"})
 
 
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT username FROM user")
+    users = c.fetchall()
+    conn.close()
+    return jsonify([user['username'] for user in users])
+
+
 @socketio.on('connect')
 def handle_connect():
     if 'username' in session:
@@ -230,13 +236,20 @@ def handle_message(data):
         return
 
     username = session['username']
-    encrypted_data = cipher_suite.encrypt(data.encode()).decode()
-    insert_message(username, 'all', encrypted_data)
-    emit('message', {'sender': username, 'message': data}, broadcast=True)
+    receiver = data.get('receiver', 'all')
+    message_content = data.get('message')
+
+    if receiver != 'all' and not user_exists(receiver):
+        emit('message', {'sender': 'System', 'receiver': username, 'message': 'Receiver not found'}, room=request.sid)
+        return
+
+    encrypted_data = cipher_suite.encrypt(message_content.encode()).decode()
+    insert_message(username, receiver, encrypted_data)
+    emit('message', {'sender': username, 'receiver': receiver, 'message': message_content}, broadcast=True)
 
 
 def insert_message(sender, receiver, encrypted_content):
-    conn = sqlite3.connect('users.db')
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("INSERT INTO message (sender, receiver, encrypted_content) VALUES (?, ?, ?)",
               (sender, receiver, encrypted_content))
@@ -256,19 +269,17 @@ def verify_user(username, password):
 
 
 def user_exists(username):
-    conn = sqlite3.connect('users.db')
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT username FROM user WHERE username=?", (username,))
     user = c.fetchone()
     conn.close()
-    if user:
-        return True
-    return False
+    return user is not None
 
 
 def add_user(username, password):
     hashed_password = generate_password_hash(password)
-    conn = sqlite3.connect('users.db')
+    conn = get_db_connection()
     c = conn.cursor()
     c.execute("INSERT INTO user (username, password) VALUES (?, ?)", (username, hashed_password))
     conn.commit()
