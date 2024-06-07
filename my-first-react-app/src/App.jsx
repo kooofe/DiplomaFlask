@@ -15,7 +15,8 @@ const App = () => {
     const [username, setUsername] = useState('');
     const [message, setMessage] = useState('');
     const [loggedIn, setLoggedIn] = useState(false);
-    const [currentChat, setCurrentChat] = useState('Global Chat');
+    const [currentRecipient, setCurrentRecipient] = useState('all');
+    const [users, setUsers] = useState([]);
     const chatWindowRef = useRef(null);
 
     useEffect(() => {
@@ -28,15 +29,25 @@ const App = () => {
                     console.error('There was an error fetching messages!', error);
                 });
 
+            axios.get('http://localhost:5000/api/users', { withCredentials: true })
+                .then(response => {
+                    setUsers(response.data);
+                })
+                .catch(error => {
+                    console.error('There was an error fetching users!', error);
+                });
+
             socket.on('message', (data) => {
-                setMessages(prevMessages => [...prevMessages, data]);
+                if (data.receiver === 'all' || data.receiver === username) {
+                    setMessages(prevMessages => [...prevMessages, data]);
+                }
             });
 
             return () => {
                 socket.off('message');
             };
         }
-    }, [loggedIn]);
+    }, [loggedIn, username]);
 
     useEffect(() => {
         if (chatWindowRef.current) {
@@ -46,8 +57,10 @@ const App = () => {
 
     const handleSendMessage = (e) => {
         e.preventDefault();
-        socket.emit('message', message);
-        setMessage('');
+        if (message.trim()) {
+            socket.emit('message', { message, receiver: currentRecipient });
+            setMessage('');
+        }
     };
 
     const handleLogout = () => {
@@ -59,45 +72,48 @@ const App = () => {
     };
 
     const handleChatChange = (chatName) => {
-        setCurrentChat(chatName);
+        setCurrentRecipient(chatName);
     };
 
     return (
         <Router>
             <Routes>
-                <Route path="/login" element={<Login setLoggedIn={setLoggedIn} />} />
+                <Route path="/login" element={<Login setLoggedIn={setLoggedIn} setUsername={setUsername} />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/" element={
                     loggedIn ? (
                         <div>
-                            <div id="main-container">
-                                <div id="navbar">
-                                    <div>navbar-with-settings</div>
-                                    <button onClick={handleLogout}>Logout</button>
-                                </div>
-                                <div id="user-profile">
-                                    <img className="dialog-icon" src="assets/img.png" alt="" />
-                                    <div>
-                                        <h1>{currentChat}</h1>
-                                        {/*<h2 id="status">online</h2>*/}
-                                    </div>
-                                </div>
-                                <div id="sidebar">
-                                    <div className="chat-panel" onClick={() => handleChatChange('Global Chat')}>
-                                        <img className="dialog-icon" src="/assets/img.png" alt="Global" />
-                                        <h1>Global Chat</h1>
-                                    </div>
-                                </div>
-                                <div id="chat-window" ref={chatWindowRef}>
-                                    {messages.map((msg, index) => (
-                                        <div key={index} className={`message ${msg.sender === username ? 'my-message' : 'received-message'}`}>
-                                            <strong>{msg.sender}: </strong>{msg.message}
+                            <h1>Chat</h1>
+                            <div id="chat-container">
+                                <div id="chat-bar">
+                                    <a href="#" onClick={handleLogout}>Logout</a>
+                                    {users.map(user => (
+                                        <div key={user} name="user_select" id="users-chat-bar">
+                                            <button onClick={() => handleChatChange(user)}>{user}</button>
                                         </div>
                                     ))}
-                                    <div className="message-input">
+                                </div>
+                                <div id="message-container">
+                                    <ul id="messages" ref={chatWindowRef}>
+                                        {messages.map((msg, index) => (
+                                            <li key={index}><strong>{msg.sender}: </strong>{msg.message}</li>
+                                        ))}
+                                    </ul>
+                                    <div id="input-container">
                                         <form onSubmit={handleSendMessage}>
-                                            <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type a message..." />
-                                            <button type="submit" disabled={!message.trim()}>Send</button>
+                                            <input
+                                                id="myMessage"
+                                                value={message}
+                                                onChange={(e) => setMessage(e.target.value)}
+                                                placeholder="Type your message here"
+                                                autoComplete="off"
+                                                onKeyPress={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        handleSendMessage(e);
+                                                    }
+                                                }}
+                                            />
+                                            <button id="send" type="submit" disabled={!message.trim()}>Send</button>
                                         </form>
                                     </div>
                                 </div>
