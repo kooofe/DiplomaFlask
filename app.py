@@ -97,23 +97,35 @@ def create_table():
                     id INTEGER PRIMARY KEY,
                     username TEXT UNIQUE NOT NULL,
                     password TEXT NOT NULL)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS message (
-                    id INTEGER PRIMARY KEY,
+    c.execute('''CREATE TABLE IF NOT EXISTS chats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    participants TEXT NOT NULL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender TEXT NOT NULL,
-                    receiver TEXT NOT NULL,
-                    encrypted_content TEXT NOT NULL)''')
+                    chat_id INTEGER NOT NULL,
+                    encrypted_content TEXT NOT NULL,
+                    FOREIGN KEY (chat_id) REFERENCES chats (id))''')
     c.execute('''CREATE TABLE IF NOT EXISTS login_attempts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
+
+    # Insert the default global chat if it doesn't exist
+    c.execute('SELECT * FROM chats WHERE type = "global"')
+    if not c.fetchone():
+        c.execute('INSERT INTO chats (name, type, participants) VALUES (?, ?, ?)', ('Global Chat', 'global', 'all'))
+        conn.commit()
+
     conn.close()
 
 
 create_table()
 
 
-# Function to check login attempts
 def check_login_attempts(username):
     conn = get_db_connection()
     c = conn.cursor()
@@ -126,7 +138,6 @@ def check_login_attempts(username):
     return attempts
 
 
-# Function to record login attempt
 def record_login_attempt(username):
     conn = get_db_connection()
     c = conn.cursor()
@@ -135,7 +146,6 @@ def record_login_attempt(username):
     conn.close()
 
 
-# Function to clear login attempts older than 15 minutes
 def clear_old_attempts(username):
     conn = get_db_connection()
     c = conn.cursor()
@@ -149,18 +159,20 @@ def clear_old_attempts(username):
 def get_messages():
     if 'username' not in session:
         return jsonify({"error": "Unauthorized"}), 401
-    username = session['username']
+
+    chat_id = request.args.get('chat_id')
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM message WHERE receiver = ? OR receiver = 'all'", (username,))
+    c.execute('SELECT * FROM messages WHERE chat_id = ?', (chat_id,))
     messages = c.fetchall()
     conn.close()
+
     decrypted_messages = []
     for message in messages:
         try:
             decrypted_content = cipher_suite.decrypt(message['encrypted_content'].encode()).decode()
             decrypted_messages.append(
-                {"sender": message['sender'], "receiver": message['receiver'], "message": decrypted_content})
+                {"sender": message['sender'], "chat_id": message['chat_id'], "message": decrypted_content})
         except Exception as e:
             print("Error decrypting message:", e)
     return jsonify(decrypted_messages)
@@ -172,15 +184,11 @@ def login():
     username = data['username']
     password = data['password']
 
-    # Clear old attempts for the user
     clear_old_attempts(username)
-
-    # Check the number of login attempts
     attempts = check_login_attempts(username)
     if attempts >= 3:
         return jsonify({"error": "Too many failed login attempts. Please try again after 15 minutes."}), 403
 
-    # Verify user
     if verify_user(username, password):
         session['username'] = username
         return jsonify({"success": "Logged in"})
@@ -221,6 +229,38 @@ def get_users():
     return jsonify([user['username'] for user in users])
 
 
+@app.route('/api/chats', methods=['POST'])
+def create_chat():
+    data = request.json
+    name = data['name']
+    chat_type = data['type']
+    participants = ','.join(data['participants'])
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('INSERT INTO chats (name, type, participants) VALUES (?, ?, ?)', (name, chat_type, participants))
+    conn.commit()
+    chat_id = c.lastrowid
+    conn.close()
+
+    return jsonify({"chat_id": chat_id})
+
+
+@app.route('/api/chats', methods=['GET'])
+def get_chats():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    username = session['username']
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('''SELECT * FROM chats WHERE type = 'global' OR participants LIKE ?''', ('%' + username + '%',))
+    chats = c.fetchall()
+    conn.close()
+
+    return jsonify([dict(chat) for chat in chats])
+
+
 @socketio.on('connect')
 def handle_connect():
     if 'username' in session:
@@ -233,26 +273,27 @@ def handle_connect():
 def handle_message(data):
     if 'username' not in session:
         app.logger.debug(f"Unauthorized message attempt. Session: {session}")
+        emit('message', {'error': 'Unauthorized'}, room=request.sid)
         return
 
     username = session['username']
-    receiver = data.get('receiver', 'all')
+    chat_id = data.get('chat_id')
     message_content = data.get('message')
 
-    if receiver != 'all' and not user_exists(receiver):
-        emit('message', {'sender': 'System', 'receiver': username, 'message': 'Receiver not found'}, room=request.sid)
+    if not chat_id or not message_content:
+        emit('message', {'error': 'Invalid data'}, room=request.sid)
         return
 
     encrypted_data = cipher_suite.encrypt(message_content.encode()).decode()
-    insert_message(username, receiver, encrypted_data)
-    emit('message', {'sender': username, 'receiver': receiver, 'message': message_content}, broadcast=True)
+    insert_message(username, chat_id, encrypted_data)
+    emit('message', {'sender': username, 'chat_id': chat_id, 'message': message_content}, broadcast=True)
 
 
-def insert_message(sender, receiver, encrypted_content):
+def insert_message(sender, chat_id, encrypted_content):
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("INSERT INTO message (sender, receiver, encrypted_content) VALUES (?, ?, ?)",
-              (sender, receiver, encrypted_content))
+    c.execute("INSERT INTO messages (sender, chat_id, encrypted_content) VALUES (?, ?, ?)",
+              (sender, chat_id, encrypted_content))
     conn.commit()
     conn.close()
 
