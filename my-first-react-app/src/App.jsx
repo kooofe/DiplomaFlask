@@ -18,8 +18,11 @@ const App = () => {
     const [currentChat, setCurrentChat] = useState(null);
     const [chats, setChats] = useState([]);
     const [chatName, setChatName] = useState('');
+    const [participants, setParticipants] = useState('');
     const [error, setError] = useState('');
     const [showPopup, setShowPopup] = useState(false);
+    const [showAddUserPopup, setShowAddUserPopup] = useState(false);
+    const [newParticipant, setNewParticipant] = useState('');
     const chatWindowRef = useRef(null);
 
     useEffect(() => {
@@ -109,25 +112,55 @@ const App = () => {
             return;
         }
 
+        const participantsList = participants.split(',').map(p => p.trim()).filter(p => p);
+        participantsList.push(username); // Automatically add the creator
+
         axios.post('http://localhost:5000/api/chats', {
             name: chatName,
             type: 'private',
-            participants: [username]  // Automatically add the creator
+            participants: participantsList
         })
             .then(response => {
                 setChats([...chats, {
                     id: response.data.chat_id,
                     name: chatName,
                     type: 'private',
-                    participants: [username]
+                    participants: participantsList
                 }]);
                 setChatName('');
+                setParticipants('');
                 setError('');
                 setShowPopup(false);
             })
             .catch(error => {
                 setError('Error creating chat');
                 console.error('Error creating chat:', error);
+            });
+    };
+
+    const handleAddUserToChat = (e) => {
+        e.preventDefault();
+        if (!newParticipant.trim()) {
+            setError('New participant username cannot be empty');
+            return;
+        }
+
+        axios.post('http://localhost:5000/api/add_user_to_chat', {
+            chat_id: currentChat.id,
+            username: newParticipant
+        })
+            .then(() => {
+                setCurrentChat({
+                    ...currentChat,
+                    participants: [...currentChat.participants, newParticipant]
+                });
+                setNewParticipant('');
+                setError('');
+                setShowAddUserPopup(false);
+            })
+            .catch(error => {
+                setError('Error adding user to chat');
+                console.error('Error adding user to chat:', error);
             });
     };
 
@@ -184,7 +217,30 @@ const App = () => {
                                                 placeholder="New chat name"
                                                 autoComplete="off"
                                             />
+                                            <input
+                                                value={participants}
+                                                onChange={(e) => setParticipants(e.target.value)}
+                                                placeholder="Participants (comma separated)"
+                                                autoComplete="off"
+                                            />
                                             <button type="submit">Create Chat</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            )}
+                            {showAddUserPopup && (
+                                <div className="popup">
+                                    <div className="popup-inner">
+                                        <button className="close-btn" onClick={() => setShowAddUserPopup(false)}>x</button>
+                                        <h2>Add User to Chat</h2>
+                                        <form onSubmit={handleAddUserToChat}>
+                                            <input
+                                                value={newParticipant}
+                                                onChange={(e) => setNewParticipant(e.target.value)}
+                                                placeholder="New participant username"
+                                                autoComplete="off"
+                                            />
+                                            <button type="submit">Add User</button>
                                         </form>
                                     </div>
                                 </div>
