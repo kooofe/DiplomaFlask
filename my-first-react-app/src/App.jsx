@@ -1,14 +1,14 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import io from 'socket.io-client';
-import {BrowserRouter as Router, Route, Routes, Link} from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import Login from './Login';
 import Register from './Register';
 import './App.css';
 
 axios.defaults.withCredentials = true;
 
-const socket = io('http://localhost:5000', {withCredentials: true});
+const socket = io('http://localhost:5000', { withCredentials: true });
 
 const App = () => {
     const [messages, setMessages] = useState([]);
@@ -19,6 +19,7 @@ const App = () => {
     const [chats, setChats] = useState([]);
     const [chatName, setChatName] = useState('');
     const [error, setError] = useState('');
+    const [showPopup, setShowPopup] = useState(false); // State for pop-up visibility
     const chatWindowRef = useRef(null);
 
     useEffect(() => {
@@ -78,7 +79,7 @@ const App = () => {
             return;
         }
         if (message.trim()) {
-            socket.emit('message', {message, chat_id: currentChat.id}, (ack) => {
+            socket.emit('message', { message, chat_id: currentChat.id }, (ack) => {
                 if (ack && ack.error) {
                     setError(ack.error);
                 } else {
@@ -107,7 +108,7 @@ const App = () => {
             setError('Chat name cannot be empty');
             return;
         }
-        axios.post('http://localhost:5000/api/chats', {name: chatName, type: 'private', participants: [username]})
+        axios.post('http://localhost:5000/api/chats', { name: chatName, type: 'private', participants: [username] })
             .then(response => {
                 setChats([...chats, {
                     id: response.data.chat_id,
@@ -117,6 +118,7 @@ const App = () => {
                 }]);
                 setChatName('');
                 setError('');
+                setShowPopup(false); // Close the pop-up after chat creation
             })
             .catch(error => {
                 setError('Error creating chat');
@@ -127,8 +129,8 @@ const App = () => {
     return (
         <Router>
             <Routes>
-                <Route path="/login" element={<Login setLoggedIn={setLoggedIn} setUsername={setUsername}/>}/>
-                <Route path="/register" element={<Register/>}/>
+                <Route path="/login" element={<Login setLoggedIn={setLoggedIn} setUsername={setUsername} />} />
+                <Route path="/register" element={<Register />} />
                 <Route path="/" element={
                     loggedIn ? (
                         <div>
@@ -140,17 +142,8 @@ const App = () => {
                                             <a href="#" onClick={() => handleChatChange(chat)}>{chat.name}</a>
                                         </div>
                                     ))}
-                                    <a href="#" onClick={handleLogout}>Logout</a>
-                                    <form onSubmit={handleCreateChat}>
-                                        <input
-                                            value={chatName}
-                                            onChange={(e) => setChatName(e.target.value)}
-                                            placeholder="New chat name"
-                                            autoComplete="off"
-                                        />
-                                        <button type="submit">Create Chat</button>
-                                    </form>
-
+                                    <a href="#" onClick={() => setShowPopup(true)}>Create Chat</a>
+                                    <a id="logout-btn" href="#" onClick={handleLogout}>Logout</a>
                                 </div>
                                 <div id="message-container">
                                 <ul id="messages" ref={chatWindowRef}>
@@ -159,7 +152,7 @@ const App = () => {
                                         ))}
                                     </ul>
                                     <div id="input-container">
-                                        {error && <p style={{color: 'red'}}>{error}</p>}
+                                        {error && <p style={{ color: 'red' }}>{error}</p>}
                                         <form onSubmit={handleSendMessage}>
                                             <input
                                                 id="myMessage"
@@ -174,6 +167,23 @@ const App = () => {
                                     </div>
                                 </div>
                             </div>
+                            {showPopup && (
+                                <div className="popup">
+                                    <div className="popup-inner">
+                                        <button className="close-btn" onClick={() => setShowPopup(false)}>x</button>
+                                        <h2>Create Chat</h2>
+                                        <form onSubmit={handleCreateChat}>
+                                            <input
+                                                value={chatName}
+                                                onChange={(e) => setChatName(e.target.value)}
+                                                placeholder="New chat name"
+                                                autoComplete="off"
+                                            />
+                                            <button type="submit">Create Chat</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div>
@@ -181,7 +191,7 @@ const App = () => {
                             <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
                         </div>
                     )
-                }/>
+                } />
             </Routes>
         </Router>
     );

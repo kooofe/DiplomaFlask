@@ -5,6 +5,7 @@ from flask_session import Session
 from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.fernet import Fernet
 import sqlite3
+import os
 
 from Cryptodome.Cipher import AES, PKCS1_OAEP
 from Cryptodome.PublicKey import RSA
@@ -18,8 +19,57 @@ CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Encryption setup
-key = Fernet.generate_key()
-cipher_suite = Fernet(key)
+
+
+KEY_FILE_PATH = 'encryption_key.txt'
+
+
+def generate_or_load_encryption_key():
+    if os.path.exists(KEY_FILE_PATH):
+        # If the key fie exists, load the key from the file
+        return load_encryption_key()
+    else:
+        # Generate a new encryption key
+        key = Fernet.generate_key()
+        # Save the key to the file
+        save_encryption_key(key)
+        return key
+
+
+def load_encryption_key():
+    try:
+        with open(KEY_FILE_PATH, 'rb') as key_file:
+            encryption_key = key_file.read()
+        return encryption_key
+    except FileNotFoundError:
+        print("Encryption key file not found.")
+        # Handle the case where the key file is not found
+        return None
+    except Exception as e:
+        print("Error loading encryption key:", e)
+        # Handle other exceptions that may occur
+        return None
+
+
+def save_encryption_key(key):
+    try:
+        with open(KEY_FILE_PATH, 'wb') as key_file:
+            key_file.write(key)
+        print("Encryption key saved to file:", KEY_FILE_PATH)
+    except Exception as e:
+        print("Error saving encryption key:", e)
+        # Handle the exception appropriately
+
+
+# Load or generate the encryption key when the application starts
+encryption_key = generate_or_load_encryption_key()
+cipher_suite = Fernet(encryption_key)
+
+if encryption_key is None:
+    # Handle the case where the key is not loaded/generated properly
+    exit(1)
+else:
+    print("Encryption key loaded/generated successfully:", encryption_key)
 
 
 def generate_rsa_keypair():
