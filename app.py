@@ -6,6 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.fernet import Fernet
 import sqlite3
 import os
+import uuid
 
 from Cryptodome.Cipher import AES, PKCS1_OAEP
 from Cryptodome.PublicKey import RSA
@@ -20,18 +21,14 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Encryption setup
 
-
 KEY_FILE_PATH = 'encryption_key.txt'
 
 
 def generate_or_load_encryption_key():
     if os.path.exists(KEY_FILE_PATH):
-        # If the key fie exists, load the key from the file
         return load_encryption_key()
     else:
-        # Generate a new encryption key
         key = Fernet.generate_key()
-        # Save the key to the file
         save_encryption_key(key)
         return key
 
@@ -43,11 +40,9 @@ def load_encryption_key():
         return encryption_key
     except FileNotFoundError:
         print("Encryption key file not found.")
-        # Handle the case where the key file is not found
         return None
     except Exception as e:
         print("Error loading encryption key:", e)
-        # Handle other exceptions that may occur
         return None
 
 
@@ -58,15 +53,12 @@ def save_encryption_key(key):
         print("Encryption key saved to file:", KEY_FILE_PATH)
     except Exception as e:
         print("Error saving encryption key:", e)
-        # Handle the exception appropriately
 
 
-# Load or generate the encryption key when the application starts
 encryption_key = generate_or_load_encryption_key()
 cipher_suite = Fernet(encryption_key)
 
 if encryption_key is None:
-    # Handle the case where the key is not loaded/generated properly
     exit(1)
 else:
     print("Encryption key loaded/generated successfully:", encryption_key)
@@ -115,25 +107,6 @@ def unpad(s):
     return s[:-padding_length]
 
 
-# Example usage
-# Step 1: Key Generation
-private_key, public_key = generate_rsa_keypair()
-
-# Step 2: Key Exchange (Sender's Perspective)
-aes_key = get_random_bytes(16)  # Generate a random AES key
-encrypted_aes_key = encrypt_with_rsa(public_key, aes_key)
-
-# Step 3: Data Encryption (Sender's Perspective)
-plaintext = "Hello, World!"
-encrypted_data = encrypt_with_aes(aes_key, plaintext.encode())
-
-# Step 4: Data Decryption (Recipient's Perspective)
-decrypted_aes_key = decrypt_with_rsa(private_key, encrypted_aes_key)
-decrypted_data = decrypt_with_aes(decrypted_aes_key, encrypted_data).decode()
-
-print("Decrypted Data:", decrypted_data)
-
-
 def get_db_connection():
     conn = sqlite3.connect('users.db')
     conn.row_factory = sqlite3.Row
@@ -148,14 +121,14 @@ def create_table():
                     username TEXT UNIQUE NOT NULL,
                     password TEXT NOT NULL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS chats (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     type TEXT NOT NULL,
                     participants TEXT NOT NULL)''')
     c.execute('''CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id TEXT PRIMARY KEY,
                     sender TEXT NOT NULL,
-                    chat_id INTEGER NOT NULL,
+                    chat_id TEXT NOT NULL,
                     encrypted_content TEXT NOT NULL,
                     FOREIGN KEY (chat_id) REFERENCES chats (id))''')
     c.execute('''CREATE TABLE IF NOT EXISTS login_attempts (
@@ -164,10 +137,11 @@ def create_table():
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
 
-    # Insert the default global chat if it doesn't exist
     c.execute('SELECT * FROM chats WHERE type = "global"')
     if not c.fetchone():
-        c.execute('INSERT INTO chats (name, type, participants) VALUES (?, ?, ?)', ('Global Chat', 'global', 'all'))
+        global_chat_id = str(uuid.uuid4())
+        c.execute('INSERT INTO chats (id, name, type, participants) VALUES (?, ?, ?, ?)',
+                  (global_chat_id, 'Global Chat', 'global', 'all'))
         conn.commit()
 
     conn.close()
@@ -281,16 +255,29 @@ def get_users():
 
 @app.route('/api/chats', methods=['POST'])
 def create_chat():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.json
     name = data['name']
     chat_type = data['type']
-    participants = ','.join(data['participants'])
+    participants = data.get('participants', [])
+
+    username = session['username']
+    if username not in participants:
+        participants.append(username)
+
+    if not name or not chat_type or not participants:
+        return jsonify({"error": "Chat name, type, and participants are required"}), 400
+
+    participants_str = ','.join(participants)
+    chat_id = str(uuid.uuid4())
 
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute('INSERT INTO chats (name, type, participants) VALUES (?, ?, ?)', (name, chat_type, participants))
+    c.execute('INSERT INTO chats (id, name, type, participants) VALUES (?, ?, ?, ?)',
+              (chat_id, name, chat_type, participants_str))
     conn.commit()
-    chat_id = c.lastrowid
     conn.close()
 
     return jsonify({"chat_id": chat_id})
@@ -342,8 +329,8 @@ def handle_message(data):
 def insert_message(sender, chat_id, encrypted_content):
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("INSERT INTO messages (sender, chat_id, encrypted_content) VALUES (?, ?, ?)",
-              (sender, chat_id, encrypted_content))
+    c.execute("INSERT INTO messages (id, sender, chat_id, encrypted_content) VALUES (?, ?, ?, ?)",
+              (str(uuid.uuid4()), sender, chat_id, encrypted_content))
     conn.commit()
     conn.close()
 

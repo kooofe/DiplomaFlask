@@ -27,7 +27,7 @@ const Login = ({setLoggedIn}) => {
     };
 
     return (
-        <div>
+        <div className="loggedOut">
             <h2>Login</h2>
             {error && <p style={{color: 'red'}}>{error}</p>}
             {error}

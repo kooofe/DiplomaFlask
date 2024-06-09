@@ -19,7 +19,7 @@ const App = () => {
     const [chats, setChats] = useState([]);
     const [chatName, setChatName] = useState('');
     const [error, setError] = useState('');
-    const [showPopup, setShowPopup] = useState(false); // State for pop-up visibility
+    const [showPopup, setShowPopup] = useState(false);
     const chatWindowRef = useRef(null);
 
     useEffect(() => {
@@ -108,7 +108,12 @@ const App = () => {
             setError('Chat name cannot be empty');
             return;
         }
-        axios.post('http://localhost:5000/api/chats', { name: chatName, type: 'private', participants: [username] })
+
+        axios.post('http://localhost:5000/api/chats', {
+            name: chatName,
+            type: 'private',
+            participants: [username]  // Automatically add the creator
+        })
             .then(response => {
                 setChats([...chats, {
                     id: response.data.chat_id,
@@ -118,7 +123,7 @@ const App = () => {
                 }]);
                 setChatName('');
                 setError('');
-                setShowPopup(false); // Close the pop-up after chat creation
+                setShowPopup(false);
             })
             .catch(error => {
                 setError('Error creating chat');
@@ -133,7 +138,7 @@ const App = () => {
                 <Route path="/register" element={<Register />} />
                 <Route path="/" element={
                     loggedIn ? (
-                        <div>
+                        <div className="loggedIn">
                             <h1>Chat</h1>
                             <div id="chat-container">
                                 <div id="chat-bar">
@@ -146,7 +151,7 @@ const App = () => {
                                     <a id="logout-btn" href="#" onClick={handleLogout}>Logout</a>
                                 </div>
                                 <div id="message-container">
-                                <ul id="messages" ref={chatWindowRef}>
+                                    <ul id="messages" ref={chatWindowRef}>
                                         {messages.map((msg, index) => (
                                             <li key={index}><strong>{msg.sender}: </strong>{msg.message}</li>
                                         ))}
@@ -186,9 +191,11 @@ const App = () => {
                             )}
                         </div>
                     ) : (
-                        <div>
+                        <div className="loggedOut">
                             <h2>Welcome to the Chat App</h2>
-                            <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
+                            <div>
+                                <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
+                            </div>
                         </div>
                     )
                 } />
