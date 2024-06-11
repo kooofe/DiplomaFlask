@@ -1,0 +1,41 @@
+/* src/Calendar.css */
+.calendar {
+  width: 300px;
+  margin: 0 auto;
+}
+
+.month {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background-color: #f1f1f1;
+}
+
+.month-name {
+  font-size: 1.25rem;
+}
+
+.prev, .next {
+  cursor: pointer;
+}
+
+.weekdays, .days {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.weekdays div, .day {
+  width: 14.28%;
+  text-align: center;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.day {
+  cursor: pointer;
+}
+
+.day:hover {
+  background-color: #ddd;
+}

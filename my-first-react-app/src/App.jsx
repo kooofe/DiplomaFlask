@@ -4,6 +4,7 @@ import io from 'socket.io-client';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import Login from './Login';
 import Register from './Register';
+import Calendar from './Calendar';
 import './App.css';
 
 axios.defaults.withCredentials = true;
@@ -26,9 +27,9 @@ const App = () => {
     const [showCreatePrivateChatPopup, setShowCreatePrivateChatPopup] = useState(false);
     const [privateChatParticipant, setPrivateChatParticipant] = useState('');
     const [users, setUsers] = useState([]);
+    const [showCalendar, setShowCalendar] = useState(false); // Calendar state
     const chatWindowRef = useRef(null);
 
-    // Fetch users on login
     useEffect(() => {
         if (loggedIn) {
             axios.get('http://localhost:5000/api/users')
@@ -37,7 +38,6 @@ const App = () => {
         }
     }, [loggedIn]);
 
-    // Fetch chats on login
     useEffect(() => {
         if (loggedIn) {
             axios.get('http://localhost:5000/api/chats')
@@ -50,7 +50,6 @@ const App = () => {
         }
     }, [loggedIn]);
 
-    // Fetch messages when current chat changes
     useEffect(() => {
         if (currentChat) {
             axios.get(`http://localhost:5000/api/messages?chat_id=${currentChat.id}`)
@@ -59,14 +58,12 @@ const App = () => {
         }
     }, [currentChat]);
 
-    // Scroll chat window to bottom when messages change
     useEffect(() => {
         if (chatWindowRef.current) {
             chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
         }
     }, [messages]);
 
-    // Handle socket events
     useEffect(() => {
         if (loggedIn) {
             socket.on('connect', () => {
@@ -129,7 +126,7 @@ const App = () => {
         }
 
         const participantsList = participants.split(',').map(p => p.trim()).filter(p => p);
-        participantsList.push(username); // Automatically add the creator
+        participantsList.push(username);
 
         axios.post('http://localhost:5000/api/chats', {
             name: chatName,
@@ -244,6 +241,7 @@ const App = () => {
                                     ))}
                                     <a href="#" onClick={() => setShowPopup(true)}>Create Group Chat</a>
                                     <a href="#" onClick={() => setShowCreatePrivateChatPopup(true)}>Create Private Chat</a>
+                                    <a href="#" onClick={() => setShowCalendar(true)}>Open Calendar</a> {/* New button */}
                                     <a id="logout-btn" href="#" onClick={handleLogout}>Logout</a>
                                 </div>
                                 <div id="message-container">
@@ -272,73 +270,79 @@ const App = () => {
                             {showPopup && (
                                 <div className="popup">
                                     <div className="popup-inner">
-                                        <button className="close-btn" onClick={() => setShowPopup(false)}>x</button>
                                         <h2>Create Group Chat</h2>
                                         <form onSubmit={handleCreateChat}>
                                             <input
+                                                type="text"
                                                 value={chatName}
                                                 onChange={(e) => setChatName(e.target.value)}
-                                                placeholder="New chat name"
-                                                autoComplete="off"
+                                                placeholder="Chat Name"
                                             />
                                             <input
+                                                type="text"
                                                 value={participants}
                                                 onChange={(e) => setParticipants(e.target.value)}
                                                 placeholder="Participants (comma separated)"
-                                                autoComplete="off"
                                             />
-                                            <button type="submit">Create Chat</button>
+                                            <button type="submit">Create</button>
                                         </form>
+                                        <button onClick={() => setShowPopup(false)}>Close</button>
                                     </div>
                                 </div>
                             )}
                             {showAddUserPopup && (
                                 <div className="popup">
                                     <div className="popup-inner">
-                                        <button className="close-btn" onClick={() => setShowAddUserPopup(false)}>x</button>
                                         <h2>Add User to Chat</h2>
                                         <form onSubmit={handleAddUserToChat}>
                                             <input
+                                                type="text"
                                                 value={newParticipant}
                                                 onChange={(e) => setNewParticipant(e.target.value)}
-                                                placeholder="New participant username"
-                                                autoComplete="off"
+                                                placeholder="New Participant Username"
                                             />
-                                            <button type="submit">Add User</button>
+                                            <button type="submit">Add</button>
                                         </form>
+                                        <button onClick={() => setShowAddUserPopup(false)}>Close</button>
                                     </div>
                                 </div>
                             )}
                             {showCreatePrivateChatPopup && (
                                 <div className="popup">
                                     <div className="popup-inner">
-                                        <button className="close-btn" onClick={() => setShowCreatePrivateChatPopup(false)}>x</button>
                                         <h2>Create Private Chat</h2>
                                         <form onSubmit={handleCreatePrivateChat}>
-                                            <select
+                                            <input
+                                                type="text"
                                                 value={privateChatParticipant}
                                                 onChange={(e) => setPrivateChatParticipant(e.target.value)}
-                                            >
-                                                <option value="">Select a user</option>
-                                                {users.filter(user => user !== username).map(user => (
-                                                    <option key={user} value={user}>{user}</option>
-                                                ))}
-                                            </select>
-                                            <button type="submit">Create Private Chat</button>
+                                                placeholder="Participant Username"
+                                            />
+                                            <button type="submit">Create</button>
                                         </form>
+                                        <button onClick={() => setShowCreatePrivateChatPopup(false)}>Close</button>
+                                    </div>
+                                </div>
+                            )}
+                            {showCalendar && (
+                                <div className="popup">
+                                    <div className="popup-inner">
+                                        <h2>Calendar</h2>
+                                        <Calendar />
+                                        <button onClick={() => setShowCalendar(false)}>Close</button>
                                     </div>
                                 </div>
                             )}
                         </div>
                     ) : (
+
                         <div className="loggedOut">
                             <h2>Welcome to the Chat App</h2>
                             <div>
                                 <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
                             </div>
-                        </div>
-                    )
-                } />
+                        </div>)
+                }/>
             </Routes>
         </Router>
     );
