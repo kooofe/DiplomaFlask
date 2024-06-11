@@ -23,8 +23,21 @@ const App = () => {
     const [showPopup, setShowPopup] = useState(false);
     const [showAddUserPopup, setShowAddUserPopup] = useState(false);
     const [newParticipant, setNewParticipant] = useState('');
+    const [showCreatePrivateChatPopup, setShowCreatePrivateChatPopup] = useState(false);
+    const [privateChatParticipant, setPrivateChatParticipant] = useState('');
+    const [users, setUsers] = useState([]);
     const chatWindowRef = useRef(null);
 
+    // Fetch users on login
+    useEffect(() => {
+        if (loggedIn) {
+            axios.get('http://localhost:5000/api/users')
+                .then(response => setUsers(response.data))
+                .catch(error => console.error('Error fetching users:', error));
+        }
+    }, [loggedIn]);
+
+    // Fetch chats on login
     useEffect(() => {
         if (loggedIn) {
             axios.get('http://localhost:5000/api/chats')
@@ -37,6 +50,7 @@ const App = () => {
         }
     }, [loggedIn]);
 
+    // Fetch messages when current chat changes
     useEffect(() => {
         if (currentChat) {
             axios.get(`http://localhost:5000/api/messages?chat_id=${currentChat.id}`)
@@ -45,12 +59,14 @@ const App = () => {
         }
     }, [currentChat]);
 
+    // Scroll chat window to bottom when messages change
     useEffect(() => {
         if (chatWindowRef.current) {
             chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
         }
     }, [messages]);
 
+    // Handle socket events
     useEffect(() => {
         if (loggedIn) {
             socket.on('connect', () => {
@@ -117,14 +133,14 @@ const App = () => {
 
         axios.post('http://localhost:5000/api/chats', {
             name: chatName,
-            type: 'private',
+            type: 'group',
             participants: participantsList
         })
             .then(response => {
                 setChats([...chats, {
                     id: response.data.chat_id,
-                    name: chatName,
-                    type: 'private',
+                    name: `${chatName} group`,
+                    type: 'group',
                     participants: participantsList
                 }]);
                 setChatName('');
@@ -164,6 +180,52 @@ const App = () => {
             });
     };
 
+    const handleCreatePrivateChat = (e) => {
+        e.preventDefault();
+        if (!privateChatParticipant.trim()) {
+            setError('Participant username cannot be empty');
+            return;
+        }
+
+        axios.post('http://localhost:5000/api/create_private_chat', {
+            participant: privateChatParticipant
+        })
+            .then(response => {
+                setChats([...chats, {
+                    id: response.data.chat_id,
+                    name: privateChatParticipant,
+                    type: 'private',
+                    participants: [username, privateChatParticipant]
+                }]);
+                setPrivateChatParticipant('');
+                setError('');
+                setShowCreatePrivateChatPopup(false);
+            })
+            .catch(error => {
+                setError('Error creating private chat');
+                console.error('Error creating private chat:', error);
+            });
+    };
+
+    const handleClearChat = () => {
+        if (!currentChat) {
+            setError('No chat selected');
+            return;
+        }
+
+        axios.post('http://localhost:5000/api/clear_chat', {
+            chat_id: currentChat.id
+        })
+            .then(() => {
+                setMessages([]);
+                setError('');
+            })
+            .catch(error => {
+                setError('Error clearing chat');
+                console.error('Error clearing chat:', error);
+            });
+    };
+
     return (
         <Router>
             <Routes>
@@ -180,7 +242,8 @@ const App = () => {
                                             <a href="#" onClick={() => handleChatChange(chat)}>{chat.name}</a>
                                         </div>
                                     ))}
-                                    <a href="#" onClick={() => setShowPopup(true)}>Create Chat</a>
+                                    <a href="#" onClick={() => setShowPopup(true)}>Create Group Chat</a>
+                                    <a href="#" onClick={() => setShowCreatePrivateChatPopup(true)}>Create Private Chat</a>
                                     <a id="logout-btn" href="#" onClick={handleLogout}>Logout</a>
                                 </div>
                                 <div id="message-container">
@@ -202,6 +265,7 @@ const App = () => {
                                             />
                                             <button id="send" type="submit" disabled={!message.trim()}>Send</button>
                                         </form>
+                                        <button onClick={handleClearChat}>Clear Chat</button>
                                     </div>
                                 </div>
                             </div>
@@ -209,7 +273,7 @@ const App = () => {
                                 <div className="popup">
                                     <div className="popup-inner">
                                         <button className="close-btn" onClick={() => setShowPopup(false)}>x</button>
-                                        <h2>Create Chat</h2>
+                                        <h2>Create Group Chat</h2>
                                         <form onSubmit={handleCreateChat}>
                                             <input
                                                 value={chatName}
@@ -241,6 +305,26 @@ const App = () => {
                                                 autoComplete="off"
                                             />
                                             <button type="submit">Add User</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            )}
+                            {showCreatePrivateChatPopup && (
+                                <div className="popup">
+                                    <div className="popup-inner">
+                                        <button className="close-btn" onClick={() => setShowCreatePrivateChatPopup(false)}>x</button>
+                                        <h2>Create Private Chat</h2>
+                                        <form onSubmit={handleCreatePrivateChat}>
+                                            <select
+                                                value={privateChatParticipant}
+                                                onChange={(e) => setPrivateChatParticipant(e.target.value)}
+                                            >
+                                                <option value="">Select a user</option>
+                                                {users.filter(user => user !== username).map(user => (
+                                                    <option key={user} value={user}>{user}</option>
+                                                ))}
+                                            </select>
+                                            <button type="submit">Create Private Chat</button>
                                         </form>
                                     </div>
                                 </div>

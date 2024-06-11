@@ -297,6 +297,52 @@ def get_chats():
 
     return jsonify([dict(chat) for chat in chats])
 
+@app.route('/api/create_private_chat', methods=['POST'])
+def create_private_chat():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    participant = data['participant']
+
+    if not participant:
+        return jsonify({"error": "Participant username is required"}), 400
+
+    username = session['username']
+    participants = sorted([username, participant])
+
+    chat_name = f"Private chat between {participants[0]} and {participants[1]}"
+    chat_id = str(uuid.uuid4())
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('INSERT INTO chats (id, name, type, participants) VALUES (?, ?, ?, ?)',
+              (chat_id, chat_name, 'private', ','.join(participants)))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"chat_id": chat_id, "chat_name": chat_name})
+
+
+@app.route('/api/clear_chat', methods=['POST'])
+def clear_chat():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    chat_id = data['chat_id']
+
+    if not chat_id:
+        return jsonify({"error": "Chat ID is required"}), 400
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('DELETE FROM messages WHERE chat_id = ?', (chat_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": "Chat cleared"})
+
 
 @socketio.on('connect')
 def handle_connect():
