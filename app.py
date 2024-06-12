@@ -135,6 +135,13 @@ def create_table():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS events (
+                    id TEXT PRIMARY KEY,
+                    creator TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    event_date DATE NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
 
     c.execute('SELECT * FROM chats WHERE type = "global"')
@@ -297,6 +304,7 @@ def get_chats():
 
     return jsonify([dict(chat) for chat in chats])
 
+
 @app.route('/api/create_private_chat', methods=['POST'])
 def create_private_chat():
     if 'username' not in session:
@@ -342,6 +350,59 @@ def clear_chat():
     conn.close()
 
     return jsonify({"success": "Chat cleared"})
+
+
+@app.route('/api/events', methods=['POST'])
+def create_event():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    title = data['title']
+    description = data.get('description')
+    event_date = data['event_date']
+    creator = session['username']
+
+    if not title or not event_date:
+        return jsonify({"error": "Title and event date are required"}), 400
+
+    event_id = str(uuid.uuid4())
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('INSERT INTO events (id, creator, title, description, event_date) VALUES (?, ?, ?, ?, ?)',
+              (event_id, creator, title, description, event_date))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": "Event created", "event_id": event_id})
+
+
+@app.route('/api/events', methods=['GET'])
+def get_events():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('SELECT * FROM events')
+    events = c.fetchall()
+    conn.close()
+
+    return jsonify([dict(event) for event in events])
+
+
+@app.route('/api/events/<event_id>', methods=['DELETE'])
+def delete_event(event_id):
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('DELETE FROM events WHERE id = ?', (event_id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": "Event deleted"})
 
 
 @socketio.on('connect')
