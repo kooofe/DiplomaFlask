@@ -46,5 +46,36 @@
 }
 
 .days .day.prev-next-month {
-  color: #999;
+    color: #999;
+}
+
+.popup-inner > form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    & div:first-child {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+
+        & > input {
+            padding: 10px;
+            border: 2px solid #373A40;
+            border-radius: 5px;
+            background-color: white;
+
+            color: #1a1a1a;
+        }
+
+        & > input:focus {
+            border: 2px solid #007bff;
+            outline: none !important;
+        }
+    }
+
+    & div:last-child {
+        display: flex;
+        justify-content: space-between;
+    }
 }

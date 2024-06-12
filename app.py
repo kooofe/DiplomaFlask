@@ -345,7 +345,13 @@ def clear_chat():
 
     conn = get_db_connection()
     c = conn.cursor()
+
+    # Delete messages associated with the chat
     c.execute('DELETE FROM messages WHERE chat_id = ?', (chat_id,))
+
+    # Delete the chat entry from the chats table
+    c.execute('DELETE FROM chats WHERE id = ?', (chat_id,))
+
     conn.commit()
     conn.close()
 
