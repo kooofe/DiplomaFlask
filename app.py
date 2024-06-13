@@ -20,9 +20,18 @@ CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Encryption setup
-aes_key = get_random_bytes(16)  # Generate a random AES key
 
 KEY_FILE_PATH = 'encryption_key.txt'
+AES_KEY_FILE_PATH = 'encryption_aes_key.txt'
+
+
+def generate_or_load_encryption_aes_key():
+    if os.path.exists(AES_KEY_FILE_PATH):
+        return load_encryption_key()
+    else:
+        aes_key = get_random_bytes(16)  # Generate a random AES key
+        save_encryption_aes_key(aes_key)
+        return aes_key
 
 
 def generate_or_load_encryption_key():
@@ -30,7 +39,7 @@ def generate_or_load_encryption_key():
         return load_encryption_key()
     else:
         key = Fernet.generate_key()
-        save_encryption_key(key)
+        save_encryption_aes_key(key)
         return key
 
 
@@ -55,14 +64,30 @@ def save_encryption_key(key):
     except Exception as e:
         print("Error saving encryption key:", e)
 
+def save_encryption_aes_key(key):
+    try:
+        with open(AES_KEY_FILE_PATH, 'wb') as key_file:
+            key_file.write(key)
+        print("Encryption aes key saved to file:", AES_KEY_FILE_PATH)
+    except Exception as e:
+        print("Error saving encryption key:", e)
 
+def save_encryption_aes_key(key):
+    try:
+        with open(AES_KEY_FILE_PATH, 'wb') as key_file:
+            key_file.write(key)
+        print("Encryption key saved to file:", AES_KEY_FILE_PATH)
+    except Exception as e:
+        print("Error saving encryption key:", e)
+
+
+aes_key = generate_or_load_encryption_aes_key()
 encryption_key = generate_or_load_encryption_key()
-cipher_suite = Fernet(encryption_key)
 
-if encryption_key is None:
+if aes_key is None:
     exit(1)
 else:
-    print("Encryption key loaded/generated successfully:", encryption_key)
+    print("Encryption key loaded/generated successfully:", aes_key)
 
 
 def generate_rsa_keypair():
@@ -98,6 +123,7 @@ def decrypt_with_aes(key, ciphertext):
     cipher_aes = AES.new(key, AES.MODE_CBC, iv)
     plaintext = unpad(cipher_aes.decrypt(ciphertext[AES.block_size:]))
     return plaintext
+
 
 encrypted_aes_key = encrypt_with_rsa(public_key, aes_key)
 print(encrypted_aes_key)
@@ -211,9 +237,8 @@ def get_messages():
     decrypted_messages = []
     for message in messages:
         try:
-            decrypted_aes_key = decrypt_with_rsa(private_key, encrypted_aes_key)
             decrypted_data = decrypt_with_aes(decrypted_aes_key, message['encrypted_content']).decode()
-            decrypted_data.append(
+            decrypted_messages.append(
                 {"sender": message['sender'], "chat_id": message['chat_id'], "message": decrypted_data})
         except Exception as e:
             print("Error decrypting message:", e)
@@ -435,7 +460,6 @@ def handle_message(data):
     # Step 2: Key Exchange (Sender's Perspective)
 
     # Step 3: Data Encryption (Sender's Perspective)
-
 
     if 'username' not in session:
         app.logger.debug(f"Unauthorized message attempt. Session: {session}")
