@@ -20,6 +20,7 @@ CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Encryption setup
+aes_key = get_random_bytes(16)  # Generate a random AES key
 
 KEY_FILE_PATH = 'encryption_key.txt'
 
@@ -71,6 +72,9 @@ def generate_rsa_keypair():
     return private_key, public_key
 
 
+private_key, public_key = generate_rsa_keypair()
+
+
 def encrypt_with_rsa(public_key, plaintext):
     rsa_key = RSA.import_key(public_key)
     cipher_rsa = PKCS1_OAEP.new(rsa_key)
@@ -94,6 +98,12 @@ def decrypt_with_aes(key, ciphertext):
     cipher_aes = AES.new(key, AES.MODE_CBC, iv)
     plaintext = unpad(cipher_aes.decrypt(ciphertext[AES.block_size:]))
     return plaintext
+
+encrypted_aes_key = encrypt_with_rsa(public_key, aes_key)
+print(encrypted_aes_key)
+decrypted_aes_key = decrypt_with_rsa(private_key, encrypted_aes_key)
+print(decrypted_aes_key)
+print(aes_key)
 
 
 def pad(s):
@@ -201,9 +211,10 @@ def get_messages():
     decrypted_messages = []
     for message in messages:
         try:
-            decrypted_content = cipher_suite.decrypt(message['encrypted_content'].encode()).decode()
-            decrypted_messages.append(
-                {"sender": message['sender'], "chat_id": message['chat_id'], "message": decrypted_content})
+            decrypted_aes_key = decrypt_with_rsa(private_key, encrypted_aes_key)
+            decrypted_data = decrypt_with_aes(decrypted_aes_key, message['encrypted_content']).decode()
+            decrypted_data.append(
+                {"sender": message['sender'], "chat_id": message['chat_id'], "message": decrypted_data})
         except Exception as e:
             print("Error decrypting message:", e)
     return jsonify(decrypted_messages)
@@ -421,6 +432,11 @@ def handle_connect():
 
 @socketio.on('message')
 def handle_message(data):
+    # Step 2: Key Exchange (Sender's Perspective)
+
+    # Step 3: Data Encryption (Sender's Perspective)
+
+
     if 'username' not in session:
         app.logger.debug(f"Unauthorized message attempt. Session: {session}")
         emit('message', {'error': 'Unauthorized'}, room=request.sid)
@@ -434,7 +450,8 @@ def handle_message(data):
         emit('message', {'error': 'Invalid data'}, room=request.sid)
         return
 
-    encrypted_data = cipher_suite.encrypt(message_content.encode()).decode()
+    encrypted_data = encrypt_with_aes(decrypted_aes_key, message_content.encode())
+
     insert_message(username, chat_id, encrypted_data)
     emit('message', {'sender': username, 'chat_id': chat_id, 'message': message_content}, broadcast=True)
 
