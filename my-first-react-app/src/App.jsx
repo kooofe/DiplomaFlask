@@ -8,7 +8,15 @@ import Register from './Register';
 import Calendar from './Calendar';
 import './App.css';
 import sweep from './assets/mop_24dp_FILL0_wght400_GRAD0_opsz24.svg';
+import Cookies from 'js-cookie';
+import DOMPurify from 'dompurify';
 
+
+const csrfToken = Cookies.get('csrf_token');
+
+axios.defaults.headers.post['X-CSRFToken'] = csrfToken;
+axios.defaults.headers.put['X-CSRFToken'] = csrfToken;
+axios.defaults.headers.delete['X-CSRFToken'] = csrfToken;
 axios.defaults.withCredentials = true;
 
 const socket = io('http://localhost:5000', {withCredentials: true});
@@ -96,8 +104,9 @@ const App = () => {
             setError('No chat selected');
             return;
         }
-        if (message.trim()) {
-            socket.emit('message', {message, chat_id: currentChat.id}, (ack) => {
+        const sanitizedMessage = DOMPurify.sanitize(message);
+        if (sanitizedMessage.trim()) {
+            socket.emit('message', {message: sanitizedMessage, chat_id: currentChat.id}, (ack) => {
                 if (ack && ack.error) {
                     setError(ack.error);
                 } else {
@@ -204,26 +213,26 @@ const App = () => {
     };
 
     const handleClearChat = (chatId) => {
-    const confirmed = window.confirm("Are you sure you want to clear this chat?");
-    if (confirmed) {
-        axios.post('http://localhost:5000/api/clear_chat', {
-            chat_id: chatId
-        })
-            .then(() => {
-                // Filter out the cleared chat from the chats list
-                setChats(chats.filter(chat => chat.id !== chatId));
-                // If the cleared chat was the current chat, set current chat to null
-                if (currentChat && currentChat.id === chatId) {
-                    setCurrentChat(null);
-                }
-                setError('');
+        const confirmed = window.confirm("Are you sure you want to clear this chat?");
+        if (confirmed) {
+            axios.post('http://localhost:5000/api/clear_chat', {
+                chat_id: chatId
             })
-            .catch(error => {
-                setError('Error clearing chat');
-                console.error('Error clearing chat:', error);
-            });
-    }
-};
+                .then(() => {
+                    // Filter out the cleared chat from the chats list
+                    setChats(chats.filter(chat => chat.id !== chatId));
+                    // If the cleared chat was the current chat, set current chat to null
+                    if (currentChat && currentChat.id === chatId) {
+                        setCurrentChat(null);
+                    }
+                    setError('');
+                })
+                .catch(error => {
+                    setError('Error clearing chat');
+                    console.error('Error clearing chat:', error);
+                });
+        }
+    };
     return (
         <Router>
             <Routes>

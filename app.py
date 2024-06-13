@@ -1,5 +1,7 @@
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
+from flask_wtf import csrf
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_socketio import SocketIO, emit
 from flask_session import Session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -23,6 +25,8 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 KEY_FILE_PATH = 'encryption_key.txt'
 AES_KEY_FILE_PATH = 'encryption_aes_key.txt'
+
+csrf = CSRFProtect(app)
 
 
 def generate_or_load_encryption_aes_key():
@@ -64,6 +68,7 @@ def save_encryption_key(key):
     except Exception as e:
         print("Error saving encryption key:", e)
 
+
 def save_encryption_aes_key(key):
     try:
         with open(AES_KEY_FILE_PATH, 'wb') as key_file:
@@ -71,6 +76,7 @@ def save_encryption_aes_key(key):
         print("Encryption aes key saved to file:", AES_KEY_FILE_PATH)
     except Exception as e:
         print("Error saving encryption key:", e)
+
 
 def save_encryption_aes_key(key):
     try:
@@ -222,6 +228,12 @@ def clear_old_attempts(username):
     conn.close()
 
 
+@app.after_request
+def set_csrf_cookie(response):
+    response.set_cookie('csrf_token', generate_csrf())
+    return response
+
+
 @app.route('/api/messages', methods=['GET'])
 def get_messages():
     if 'username' not in session:
@@ -246,6 +258,7 @@ def get_messages():
 
 
 @app.route('/api/login', methods=['POST'])
+@csrf.exempt
 def login():
     data = request.json
     username = data['username']
@@ -457,10 +470,6 @@ def handle_connect():
 
 @socketio.on('message')
 def handle_message(data):
-    # Step 2: Key Exchange (Sender's Perspective)
-
-    # Step 3: Data Encryption (Sender's Perspective)
-
     if 'username' not in session:
         app.logger.debug(f"Unauthorized message attempt. Session: {session}")
         emit('message', {'error': 'Unauthorized'}, room=request.sid)
