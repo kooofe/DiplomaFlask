@@ -43,6 +43,24 @@ The application follows a client-server architecture with distinct frontend and 
 - **State Management**: React Hooks and Context API
 - **Communication**: Axios for HTTP requests, Socket.IO for WebSocket connections
 
+## Screenshots
+
+Here are some screenshots of the application:
+
+### 1. Login Page
+![Login Page](readmeFiles/login-screen.png)
+
+### 2. Chat Interface
+![Chat Interface](readmeFiles/user-interface.png)
+
+### 3. Calendar
+![Calendar Interface](readmeFiles/calendar.png)
+![Event Page](readmeFiles/event.png)
+
+### 4. Encrypted Message View (Backend)
+![Encrypted Messages](readmeFiles/messages-encrypted.png)
+
+
 ## Installation
 
 1. Clone the repository:
