@@ -4,7 +4,7 @@ from flask_wtf import csrf
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_socketio import SocketIO, emit
 from flask_session import Session
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
 from cryptography.fernet import Fernet
 import sqlite3
 import os
