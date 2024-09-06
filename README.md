@@ -48,17 +48,19 @@ The application follows a client-server architecture with distinct frontend and 
 Here are some screenshots of the application:
 
 ### 1. Login Page
-![Login Page](readmeFiles/login-screen.png)
+<img src="readmeFiles/login-screen.png" alt="Login Page" width="600"/>
 
 ### 2. Chat Interface
-![Chat Interface](readmeFiles/user-interface.png)
+<img src="readmeFiles/user-interface.png" alt="Chat Interface" width="600"/>
 
 ### 3. Calendar
-![Calendar Interface](readmeFiles/calendar.png)
-![Event Page](readmeFiles/event.png)
+<div width="600">
+    <img src="readmeFiles/calendar.png" alt="Calendar Interface"/>
+    <img src="readmeFiles/event.png" alt="Event Page"/>
+</div>
 
 ### 4. Encrypted Message View (Backend)
-![Encrypted Messages](readmeFiles/messages-encrypted.png)
+<img src="readmeFiles/messages-encrypted.png" alt="Encrypted Messages" width="600"/>
 
 
 ## Installation
